@@ -1,5 +1,8 @@
 use super::*;
 
+// load_tests.rs declares this module as its child. Its private HashMapEnv
+// fixture and env_lock helper are inherited from that parent through super.
+
 #[test]
 fn env_overlay_toggles_agent_tracing_capture_content() {
     let _g = env_lock();

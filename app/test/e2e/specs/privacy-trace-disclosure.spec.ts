@@ -7,6 +7,9 @@ import { resetApp } from '../helpers/reset-app';
 import { navigateViaHash } from '../helpers/shared-flows';
 import { startMockServer, stopMockServer } from '../mock-server';
 
+// Fresh configuration and consent-gated backend requests are covered by
+// tests/json_rpc_e2e/privacy_consent.rs in an isolated temporary workspace.
+// This shared desktop session covers the disclosure's renderer entry point.
 describe('Privacy trace disclosure', () => {
   before(async function () {
     this.timeout(90_000);
@@ -28,16 +31,6 @@ describe('Privacy trace disclosure', () => {
   it('explains separate trace and content opt-ins from the welcome screen', async () => {
     await navigateViaHash('/onboarding/welcome');
     await waitForTestId('onboarding-welcome-step');
-    const snapshot = await callOpenhumanRpc<{
-      result: {
-        config: {
-          observability: { share_usage_data: boolean; agent_tracing: { capture_content: boolean } };
-        };
-      };
-    }>('openhuman.config_get');
-    if (!snapshot.ok) throw new Error(`Reading consent state failed: ${JSON.stringify(snapshot)}`);
-    expect(snapshot.result?.result.config.observability.share_usage_data).toBe(false);
-    expect(snapshot.result?.result.config.observability.agent_tracing.capture_content).toBe(false);
     await clickText('What leaves my computer?');
     await waitForText('Agent run traces (opt-in)');
     expect(await textExists('Cloud AI Inference')).toBe(true);

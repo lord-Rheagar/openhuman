@@ -1,5 +1,7 @@
 //! Drive the real chat, span collector and authenticated OTLP proxy through
 //! independent sharing/content choices against a recording loopback backend.
+//! Disclosure rendering is exercised by privacy-trace-disclosure.spec.ts
+//! (desktop) and privacy-what-leaves-sheet.spec.ts (browser).
 
 use super::*;
 

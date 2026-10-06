@@ -70,15 +70,8 @@ async function openSheetAndAssertDescribed(page: Page): Promise<void> {
 test.describe('Privacy — the "what leaves my computer" sheet', () => {
   test('opens as a described dialog carrying the honest list', async ({ page }) => {
     await bootIntoOnboardingWelcome(page, 'pw-what-leaves-open');
-    const snapshot = await callCoreRpc<{
-      result: {
-        config: {
-          observability: { share_usage_data: boolean; agent_tracing: { capture_content: boolean } };
-        };
-      };
-    }>('openhuman.config_get');
-    expect(snapshot.result.config.observability.share_usage_data).toBe(false);
-    expect(snapshot.result.config.observability.agent_tracing.capture_content).toBe(false);
+    // The shared core retains saved choices. The isolated fresh-default and
+    // five-state export checks live in tests/json_rpc_e2e/privacy_consent.rs.
     await openSheetAndAssertDescribed(page);
 
     await expect(sheet(page)).toContainText(HEADLINE);
