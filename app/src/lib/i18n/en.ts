@@ -1,6 +1,15 @@
 import type { TranslationMap } from './types';
 
 const en: TranslationMap = {
+  // Editable composer dictation.
+  'composer.dictate': 'Dictate',
+  'composer.finishDictation': 'Finish dictation',
+  'composer.discardDictation': 'Discard dictation',
+  'composer.dictationStarting': 'Starting microphone...',
+  'composer.dictationRecording': 'Recording. Finish to add text, or discard.',
+  'composer.dictationFailed': 'Transcription failed. Please try again.',
+  'composer.dictationTimedOut': 'Dictation timed out. Please try again.',
+
   // Navigation
   'nav.home': 'Home',
   'nav.chat': 'Chat',

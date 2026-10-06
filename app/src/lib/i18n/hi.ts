@@ -3,6 +3,16 @@ import type { TranslationMap } from './types';
 // Hindi (हिन्दी) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Editable composer dictation.
+  'composer.dictate': 'बोलकर लिखें',
+  'composer.finishDictation': 'डिक्टेशन पूरा करें',
+  'composer.discardDictation': 'डिक्टेशन रद्द करें',
+  'composer.dictationStarting': 'माइक्रोफ़ोन चालू हो रहा है...',
+  'composer.dictationRecording':
+    'रिकॉर्डिंग जारी है। टेक्स्ट जोड़ने के लिए पूरा करें या रद्द करें।',
+  'composer.dictationFailed': 'आवाज़ से टेक्स्ट बनाने में त्रुटि हुई। फिर से कोशिश करें।',
+  'composer.dictationTimedOut': 'डिक्टेशन का समय समाप्त हो गया। फिर से कोशिश करें।',
+
   // Share cards (#5006).
   'share.button': 'साझा करें',
   'share.modalTitle': 'इस पल को साझा करें',

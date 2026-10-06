@@ -3,6 +3,16 @@ import type { TranslationMap } from './types';
 // French (Français) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Editable composer dictation.
+  'composer.dictate': 'Dicter',
+  'composer.finishDictation': 'Terminer la dictée',
+  'composer.discardDictation': 'Abandonner la dictée',
+  'composer.dictationStarting': 'Démarrage du microphone...',
+  'composer.dictationRecording':
+    'Enregistrement en cours. Terminez pour ajouter le texte ou abandonnez.',
+  'composer.dictationFailed': 'La transcription a échoué. Veuillez réessayer.',
+  'composer.dictationTimedOut': 'Le délai de la dictée a expiré. Veuillez réessayer.',
+
   // Share cards (#5006).
   'share.button': 'Partager',
   'share.modalTitle': 'Partagez ce moment',

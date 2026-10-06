@@ -3,6 +3,15 @@ import type { TranslationMap } from './types';
 // Indonesian (Bahasa Indonesia) translations. Keys mirror en.ts; missing/
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
+  // Editable composer dictation.
+  'composer.dictate': 'Dikte',
+  'composer.finishDictation': 'Selesaikan dikte',
+  'composer.discardDictation': 'Buang dikte',
+  'composer.dictationStarting': 'Menyalakan mikrofon...',
+  'composer.dictationRecording': 'Merekam. Selesaikan untuk menambahkan teks, atau buang rekaman.',
+  'composer.dictationFailed': 'Transkripsi gagal. Silakan coba lagi.',
+  'composer.dictationTimedOut': 'Waktu dikte habis. Silakan coba lagi.',
+
   // Share cards (#5006).
   'share.button': 'Bagikan',
   'share.modalTitle': 'Bagikan momen ini',
