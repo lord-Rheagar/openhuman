@@ -74,11 +74,17 @@ test.describe('Privacy — the "what leaves my computer" sheet', () => {
 
     await expect(sheet(page)).toContainText(HEADLINE);
 
-    // The three items are the point of the sheet — a dialog that renders its
+    // The four items are the point of the sheet — a dialog that renders its
     // chrome but drops its content would otherwise satisfy the assertions above.
     await expect(sheet(page)).toContainText('Cloud AI Inference');
     await expect(sheet(page)).toContainText('Third-party integrations');
-    await expect(sheet(page)).toContainText('Crash Reports & Usage Data (opt-out)');
+    await expect(sheet(page)).toContainText('Crash reports and product analytics (opt-out)');
+    await expect(sheet(page)).toContainText('Agent run traces (opt-in)');
+    await expect(sheet(page)).toContainText('timing and token usage data to Langfuse');
+    await expect(sheet(page)).toContainText(
+      'prompts, replies, system prompts, and tool inputs and results'
+    );
+    await expect(sheet(page)).toContainText('Sharing and content capture both start turned off.');
   });
 
   test('Escape closes it and returns the user to the step', async ({ page }) => {

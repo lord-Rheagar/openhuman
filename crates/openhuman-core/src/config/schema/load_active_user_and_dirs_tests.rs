@@ -641,7 +641,8 @@ fn env_overlay_toggles_agent_tracing_capture_content() {
     // top of the file) so a concurrent test's env mutation can't race in.
     let _g = env_lock();
 
-    // Content capture starts off until a user or operator opts in.
+    // Config delegates to ObservabilityConfig::default(), whose tracing config
+    // uses default_capture_content() = false (#7016). Saved opt-ins stay explicit.
     let mut cfg = Config::default();
     assert!(!cfg.observability.agent_tracing.capture_content);
 

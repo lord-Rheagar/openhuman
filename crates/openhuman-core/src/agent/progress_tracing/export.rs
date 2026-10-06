@@ -144,7 +144,7 @@ pub(crate) async fn export_subagent_journal_trace(
     }
     // Check the push gates before reading the child's journal: without a live
     // session the push refuses anyway, and the read and observation build were
-    // pure cost — on every delegated turn, since usage sharing defaults on.
+    // unnecessary work on delegated turns after opting in to usage sharing.
     if !langfuse::journal_push_ready(config) {
         log::debug!(
             "[agent-tracing] child trace export skipped: push not possible run_id={journal_run_id}"

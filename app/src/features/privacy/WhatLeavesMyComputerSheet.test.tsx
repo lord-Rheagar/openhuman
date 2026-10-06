@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import de from '../../lib/i18n/de';
 import { I18nProvider } from '../../lib/i18n/I18nContext';
+import pt from '../../lib/i18n/pt';
 import localeReducer, { setLocale } from '../../store/localeSlice';
 import { WHAT_LEAVES_ITEMS } from './whatLeavesItems';
 import WhatLeavesLink from './WhatLeavesLink';
@@ -61,6 +62,20 @@ describe('WhatLeavesMyComputerSheet', () => {
     render(<WhatLeavesMyComputerSheet open={true} onClose={onClose} />);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('names OpenHuman as the backend owner in the Portuguese disclosure', () => {
+    const store = configureStore({ reducer: { locale: localeReducer } });
+    store.dispatch(setLocale('pt'));
+    render(
+      <Provider store={store}>
+        <I18nProvider>
+          <WhatLeavesMyComputerSheet open={true} onClose={() => {}} />
+        </I18nProvider>
+      </Provider>
+    );
+    expect(screen.getByText(pt['privacy.whatLeaves.traces.title'])).toBeInTheDocument();
+    expect(screen.getByText(/Langfuse por meio do backend do OpenHuman/)).toBeInTheDocument();
   });
 });
 
