@@ -28,11 +28,25 @@ describe('Privacy trace disclosure', () => {
   it('explains separate trace and content opt-ins from the welcome screen', async () => {
     await navigateViaHash('/onboarding/welcome');
     await waitForTestId('onboarding-welcome-step');
+    const snapshot = await callOpenhumanRpc<{
+      result: {
+        config: {
+          observability: { share_usage_data: boolean; agent_tracing: { capture_content: boolean } };
+        };
+      };
+    }>('openhuman.config_get');
+    if (!snapshot.ok) throw new Error(`Reading consent state failed: ${JSON.stringify(snapshot)}`);
+    expect(snapshot.result?.result.config.observability.share_usage_data).toBe(false);
+    expect(snapshot.result?.result.config.observability.agent_tracing.capture_content).toBe(false);
     await clickText('What leaves my computer?');
     await waitForText('Agent run traces (opt-in)');
     expect(await textExists('Cloud AI Inference')).toBe(true);
     expect(await textExists('Crash reports and product analytics (opt-out)')).toBe(true);
-    expect(await textExists('timing and token usage data to Langfuse')).toBe(true);
+    expect(
+      await textExists(
+        'OpenHuman sends timing and token usage data to Langfuse through its backend.'
+      )
+    ).toBe(true);
     expect(await textExists('prompts, replies, system prompts, and tool inputs and results')).toBe(
       true
     );

@@ -70,6 +70,15 @@ async function openSheetAndAssertDescribed(page: Page): Promise<void> {
 test.describe('Privacy — the "what leaves my computer" sheet', () => {
   test('opens as a described dialog carrying the honest list', async ({ page }) => {
     await bootIntoOnboardingWelcome(page, 'pw-what-leaves-open');
+    const snapshot = await callCoreRpc<{
+      result: {
+        config: {
+          observability: { share_usage_data: boolean; agent_tracing: { capture_content: boolean } };
+        };
+      };
+    }>('openhuman.config_get');
+    expect(snapshot.result.config.observability.share_usage_data).toBe(false);
+    expect(snapshot.result.config.observability.agent_tracing.capture_content).toBe(false);
     await openSheetAndAssertDescribed(page);
 
     await expect(sheet(page)).toContainText(HEADLINE);
@@ -80,7 +89,9 @@ test.describe('Privacy — the "what leaves my computer" sheet', () => {
     await expect(sheet(page)).toContainText('Third-party integrations');
     await expect(sheet(page)).toContainText('Crash reports and product analytics (opt-out)');
     await expect(sheet(page)).toContainText('Agent run traces (opt-in)');
-    await expect(sheet(page)).toContainText('timing and token usage data to Langfuse');
+    await expect(sheet(page)).toContainText(
+      'OpenHuman sends timing and token usage data to Langfuse through its backend.'
+    );
     await expect(sheet(page)).toContainText(
       'prompts, replies, system prompts, and tool inputs and results'
     );
