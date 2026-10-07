@@ -4,6 +4,10 @@ import type { TranslationMap } from './types';
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
   // Editable composer dictation.
+  'composer.dictationUnavailable':
+    'Diktieren ist nicht verfügbar. Prüfe deinen Sprachanbieter unter Einstellungen > Sprache.',
+  'composer.dictationStatusFailed':
+    'Die Verfügbarkeit der Diktierfunktion konnte nicht geprüft werden. Kehre zu diesem Fenster zurück, um es erneut zu versuchen.',
   'composer.dictate': 'Diktieren',
   'composer.finishDictation': 'Diktat abschließen',
   'composer.discardDictation': 'Diktat verwerfen',

@@ -4,6 +4,8 @@ import type { TranslationMap } from './types';
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
   // Editable composer dictation.
+  'composer.dictationUnavailable': '听写不可用。请在设置 > 语音中检查语音识别提供商。',
+  'composer.dictationStatusFailed': '无法检查听写是否可用。请返回此窗口重试。',
   'composer.dictate': '听写',
   'composer.finishDictation': '完成听写',
   'composer.discardDictation': '放弃听写',

@@ -331,6 +331,7 @@ describe('OpenHumanDictationAdapter', () => {
     const second = h.session.stop();
     expect(first).toBe(second);
     expect(recorder.stop).toHaveBeenCalledOnce();
+    await flush();
     expect(transcribe).toHaveBeenCalledOnce();
     result.resolve('completed');
     await first;
@@ -339,13 +340,18 @@ describe('OpenHumanDictationAdapter', () => {
     expect(h.ended).toHaveBeenCalledOnce();
   });
 
-  it('auto-stops long recordings and delivers their final transcript', async () => {
+  it('discards a timed-out recording without uploading audio or changing the draft', async () => {
     const h = listen();
     await flush();
     await vi.advanceTimersByTimeAsync(MAX_DICTATION_RECORDING_MS);
-    expect(h.speech).toHaveBeenCalledExactlyOnceWith({ transcript: 'spoken words', isFinal: true });
+    expect(h.speech).not.toHaveBeenCalled();
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(encodeWav).not.toHaveBeenCalled();
     expect(track.stop).toHaveBeenCalledOnce();
-    expect(adapter.getSnapshot().phase).toBe('idle');
+    expect(adapter.getSnapshot()).toEqual({ phase: 'idle', error: 'timed-out' });
+    expect(h.ended).toHaveBeenCalledExactlyOnceWith({ transcript: '', isFinal: true });
+    await h.session.stop();
+    expect(transcribe).not.toHaveBeenCalled();
   });
 
   it('bounds a hanging permission request and discards a later grant', async () => {

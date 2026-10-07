@@ -82,9 +82,107 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   mocks.invalidationListeners.clear();
+  vi.useRealTimers();
 });
 
 describe('useComposerDictation', () => {
+  it('retries transient probe failures with bounded exponential backoff', async () => {
+    vi.useFakeTimers();
+    mocks.callCoreRpc.mockRejectedValue(new Error('temporary failure'));
+    const { result } = renderHook(() => useComposerDictation('thread-a'));
+    await act(async () => {});
+    expect(result.current.error).toBe('voice-status-failed');
+    for (const delay of [1_000, 2_000, 4_000]) {
+      const calls = mocks.callCoreRpc.mock.calls.length;
+      await act(async () => vi.advanceTimersByTimeAsync(delay - 1));
+      expect(mocks.callCoreRpc).toHaveBeenCalledTimes(calls);
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+      expect(mocks.callCoreRpc).toHaveBeenCalledTimes(calls + 1);
+    }
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.callCoreRpc).toHaveBeenCalledTimes(4);
+    expect(result.current.adapter).toBeUndefined();
+
+    mocks.callCoreRpc.mockResolvedValue({ stt_available: true });
+    await act(async () => window.dispatchEvent(new Event('focus')));
+    expect(result.current.adapter).toBe(adapters[0]);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('recovers on a scheduled retry and stops retrying once available', async () => {
+    vi.useFakeTimers();
+    mocks.callCoreRpc.mockRejectedValueOnce(new Error('core starting'));
+    const { result } = renderHook(() => useComposerDictation('thread-a'));
+    await act(async () => {});
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(result.current.adapter).toBe(adapters[0]);
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.callCoreRpc).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['unconfigured', 'missing-method'])(
+    'does not automatically retry %s but rechecks on focus',
+    async condition => {
+      vi.useFakeTimers();
+      if (condition === 'missing-method') {
+        mocks.callCoreRpc.mockRejectedValue(new CoreRpcError('missing', 'method_not_found'));
+      } else {
+        mocks.callCoreRpc.mockResolvedValue({ stt_available: false });
+      }
+      const { result } = renderHook(() => useComposerDictation('thread-a'));
+      await act(async () => {});
+      await act(async () => vi.advanceTimersByTimeAsync(60_000));
+      expect(result.current.error).toBe('stt-unavailable');
+      expect(mocks.callCoreRpc).toHaveBeenCalledOnce();
+
+      mocks.callCoreRpc.mockResolvedValue({ stt_available: true });
+      await act(async () => window.dispatchEvent(new Event('focus')));
+      expect(result.current.adapter).toBe(adapters[0]);
+      expect(result.current.error).toBeNull();
+    }
+  );
+
+  it('coalesces focus probes and preserves an existing capture session', async () => {
+    const probe = deferred<{ stt_available: boolean }>();
+    mocks.callCoreRpc.mockReturnValue(probe.promise);
+    const { result, rerender } = renderHook(() => useComposerDictation('thread-a'));
+    act(() => window.dispatchEvent(new Event('focus')));
+    expect(mocks.callCoreRpc).toHaveBeenCalledOnce();
+    await act(async () => probe.resolve({ stt_available: true }));
+    act(() => adapters[0]!.publish({ phase: 'recording', error: null }));
+    const state = result.current;
+    rerender();
+    expect(result.current).toBe(state);
+    act(() => window.dispatchEvent(new Event('focus')));
+    expect(mocks.callCoreRpc).toHaveBeenCalledOnce();
+    expect(adapters[0]!.cancel).not.toHaveBeenCalled();
+    expect(adapters[0]!.dispose).not.toHaveBeenCalled();
+  });
+
+  it('cancels retry timers on scope changes and all listeners on unmount', async () => {
+    vi.useFakeTimers();
+    mocks.callCoreRpc.mockRejectedValueOnce(new Error('temporary failure'));
+    const { result, rerender, unmount } = renderHook(({ thread }) => useComposerDictation(thread), {
+      initialProps: { thread: 'thread-a' },
+    });
+    await act(async () => {});
+    rerender({ thread: 'thread-b' });
+    await act(async () => {});
+    expect(result.current.adapter).toBe(adapters[0]);
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.callCoreRpc).toHaveBeenCalledTimes(2);
+
+    mocks.callCoreRpc.mockRejectedValue(new Error('temporary failure'));
+    rerender({ thread: 'thread-c' });
+    await act(async () => {});
+    unmount();
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(mocks.callCoreRpc).toHaveBeenCalledTimes(3);
+  });
+
   it('fails closed until the active core confirms a usable STT provider', async () => {
     const probe = deferred<{ stt_available: boolean }>();
     mocks.callCoreRpc.mockReturnValue(probe.promise);

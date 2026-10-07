@@ -29,6 +29,8 @@ Applies to every release, all platforms.
 
 ### Editable composer dictation
 
+- [ ] **The recording limit does not upload audio**: Leave dictation recording for one minute without selecting Finish. Confirm capture stops, a timeout appears, and the draft remains unchanged without a transcription request.
+
 - [ ] **Dictation remains an editable draft on Windows, macOS, and Linux**: On Chat, select Dictate and grant microphone permission. Edit the draft while speaking, select Finish dictation, and correct the appended transcript before selecting Send. Confirm the microphone indicator clears when recording finishes.
 - [ ] **Discard and navigation release microphone capture**: Start dictation, then discard it or press Escape. Repeat while transcription is pending and while switching threads or opening Voice mode. Confirm the draft stays intact and the microphone indicator clears.
 - [ ] **Permission denial and missing voice support stay usable**: Deny microphone access and confirm a localized error with an editable draft. In a build with the voice feature disabled, confirm the Dictate control stays hidden.

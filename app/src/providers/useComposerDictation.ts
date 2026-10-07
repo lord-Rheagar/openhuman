@@ -26,6 +26,8 @@ interface ScopedDictationState {
   error: ComposerDictationError | null;
 }
 
+const PROBE_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
+
 /**
  * Offer dictation only after the active core confirms a usable STT provider.
  * `voice_status` is a config-only read: it does not record or contact a provider,
@@ -74,56 +76,83 @@ export function useComposerDictation(threadId: string | null): {
     let revoked = false;
     let adapter: OpenHumanDictationAdapter | undefined;
     let unsubscribe: (() => void) | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryCount = 0;
+    let probing = false;
     setState({ scope, status: 'checking', error: null });
 
-    void callCoreRpc<VoiceStatus>({
-      method: 'openhuman.voice_status',
-      params: {},
-      // Availability is a narrow read, not evidence that the login expired.
-      suppressAuthExpiredEvent: true,
-    })
-      .then(voice => {
-        if (disposed) return;
-        if (voice?.stt_available !== true) {
-          setState({ scope, status: 'unavailable', error: 'stt-unavailable' });
-          return;
-        }
-        adapter = createOpenHumanDictationAdapter();
-        activeAdapter.current = adapter;
-        const publish = () => {
-          if (disposed || revoked || !adapter) return;
-          const snapshot = adapter.getSnapshot();
-          if (snapshot.error === 'voice-unavailable') {
-            // The STT call can discover a missing dispatch method after the
-            // status probe succeeded (for example with a mismatched core).
-            revoked = true;
-            adapter.cancel();
-            unsubscribe?.();
-            adapter.dispose();
-            if (activeAdapter.current === adapter) activeAdapter.current = null;
-            setState({ scope, status: 'unavailable', error: 'voice-unavailable' });
+    /** Coalesce availability reads and retry transient failures within this scope. */
+    const probe = () => {
+      if (disposed || probing || adapter || revoked) return;
+      probing = true;
+      clearTimeout(retryTimer);
+      void callCoreRpc<VoiceStatus>({
+        method: 'openhuman.voice_status',
+        params: {},
+        // Availability is a narrow read, not evidence that the login expired.
+        suppressAuthExpiredEvent: true,
+      })
+        .then(voice => {
+          if (disposed) return;
+          if (voice?.stt_available !== true) {
+            setState({ scope, status: 'unavailable', error: 'stt-unavailable' });
             return;
           }
-          setState({ scope, adapter, status: snapshot.phase, error: snapshot.error });
-        };
-        unsubscribe = adapter.subscribe(publish);
-        publish();
-      })
-      .catch(error => {
-        if (disposed) return;
-        const missingVoice = error instanceof CoreRpcError && error.kind === 'method_not_found';
-        console.debug('[composer-dictation] voice availability probe failed', {
-          kind: missingVoice ? 'method_not_found' : 'unavailable',
+          adapter = createOpenHumanDictationAdapter();
+          activeAdapter.current = adapter;
+          /** Project adapter state, withdrawing it if dispatch is unsupported. */
+          const publish = () => {
+            if (disposed || revoked || !adapter) return;
+            const snapshot = adapter.getSnapshot();
+            if (snapshot.error === 'voice-unavailable') {
+              // The STT call can discover a missing dispatch method after the
+              // status probe succeeded (for example with a mismatched core).
+              revoked = true;
+              adapter.cancel();
+              unsubscribe?.();
+              adapter.dispose();
+              if (activeAdapter.current === adapter) activeAdapter.current = null;
+              setState({ scope, status: 'unavailable', error: 'voice-unavailable' });
+              return;
+            }
+            setState({ scope, adapter, status: snapshot.phase, error: snapshot.error });
+          };
+          unsubscribe = adapter.subscribe(publish);
+          publish();
+        })
+        .catch(error => {
+          if (disposed) return;
+          const missingVoice = error instanceof CoreRpcError && error.kind === 'method_not_found';
+          console.debug('[composer-dictation] voice availability probe failed', {
+            kind: missingVoice ? 'method_not_found' : 'unavailable',
+          });
+          setState({
+            scope,
+            status: 'unavailable',
+            error: missingVoice ? 'stt-unavailable' : 'voice-status-failed',
+          });
+          if (!missingVoice && retryCount < PROBE_RETRY_DELAYS_MS.length) {
+            retryTimer = setTimeout(probe, PROBE_RETRY_DELAYS_MS[retryCount++]);
+          }
+        })
+        .finally(() => {
+          probing = false;
         });
-        setState({
-          scope,
-          status: 'unavailable',
-          error: missingVoice ? 'stt-unavailable' : 'voice-status-failed',
-        });
-      });
+    };
+
+    /** Recheck on focus after a failed probe or speech setup in another window. */
+    const onFocus = () => {
+      if (probing || adapter || revoked) return;
+      retryCount = 0;
+      probe();
+    };
+    window.addEventListener('focus', onFocus);
+    probe();
 
     return () => {
       disposed = true;
+      clearTimeout(retryTimer);
+      window.removeEventListener('focus', onFocus);
       unsubscribe?.();
       adapter?.dispose();
       if (activeAdapter.current === adapter) activeAdapter.current = null;
@@ -134,10 +163,8 @@ export function useComposerDictation(threadId: string | null): {
   // A render with a different scope must withdraw the old adapter immediately,
   // before effects run or a slow probe returns for the new connection/thread.
   const current = state?.scope === scope ? state : null;
-  return {
-    adapter: current?.adapter,
-    status: current?.status ?? (threadId && captureSupported ? 'checking' : 'unavailable'),
-    error: current?.error ?? null,
-    cancel,
-  };
+  const adapter = current?.adapter;
+  const status = current?.status ?? (threadId && captureSupported ? 'checking' : 'unavailable');
+  const error = current?.error ?? null;
+  return useMemo(() => ({ adapter, status, error, cancel }), [adapter, status, error, cancel]);
 }

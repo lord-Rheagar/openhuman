@@ -4,6 +4,10 @@ import type { TranslationMap } from './types';
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
   // Editable composer dictation.
+  'composer.dictationUnavailable':
+    '받아쓰기를 사용할 수 없습니다. 설정 > 음성에서 음성 인식 제공업체를 확인하세요.',
+  'composer.dictationStatusFailed':
+    '받아쓰기 사용 가능 여부를 확인하지 못했습니다. 다시 시도하려면 이 창으로 돌아오세요.',
   'composer.dictate': '받아쓰기',
   'composer.finishDictation': '받아쓰기 완료',
   'composer.discardDictation': '받아쓰기 취소',

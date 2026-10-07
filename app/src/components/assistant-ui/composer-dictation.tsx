@@ -5,6 +5,7 @@ import { LoaderCircleIcon, MicIcon, SquareIcon, XIcon } from 'lucide-react';
 
 import { TooltipIconButton } from './tooltip-icon-button';
 
+/** Offer capture only when supported, with explicit Finish and Discard actions. */
 export function ComposerDictationControls() {
   const { t } = useT();
   const dictation = useComposerDictationState();
@@ -59,6 +60,7 @@ export function ComposerDictationControls() {
   );
 }
 
+/** Announce dictation phases and translate every safe error code for the user. */
 export function ComposerDictationStatus() {
   const { t } = useT();
   const dictation = useComposerDictationState();
@@ -66,6 +68,18 @@ export function ComposerDictationStatus() {
 
   let errorText: string | null = null;
   switch (dictation.error) {
+    case 'stt-unavailable':
+      errorText = t(
+        'composer.dictationUnavailable',
+        'Dictation is unavailable. Check your speech provider in Settings > Voice.'
+      );
+      break;
+    case 'voice-status-failed':
+      errorText = t(
+        'composer.dictationStatusFailed',
+        'Could not check dictation availability. Return to this window to try again.'
+      );
+      break;
     case 'microphone-unavailable':
       errorText = t('mic.unavailable', 'Microphone is not available');
       break;

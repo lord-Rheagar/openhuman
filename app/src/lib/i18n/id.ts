@@ -4,6 +4,10 @@ import type { TranslationMap } from './types';
 // English-identical values fall back to English via I18nContext.resolveEn().
 const messages: TranslationMap = {
   // Editable composer dictation.
+  'composer.dictationUnavailable':
+    'Dikte tidak tersedia. Periksa penyedia pengenalan suara Anda di Pengaturan > Suara.',
+  'composer.dictationStatusFailed':
+    'Tidak dapat memeriksa ketersediaan dikte. Kembali ke jendela ini untuk mencoba lagi.',
   'composer.dictate': 'Dikte',
   'composer.finishDictation': 'Selesaikan dikte',
   'composer.discardDictation': 'Buang dikte',

@@ -1,6 +1,6 @@
-import { expect, type Locator, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
-import { clearChatComposer, composerText, replaceChatComposerText } from '../helpers/chat-composer';
+import { webElements, type WebTestElement } from '../../e2e/helpers/element-helpers';
 import { bootAuthenticatedPage, dismissWalkthroughIfPresent } from '../helpers/core-rpc';
 
 interface CaptureState {
@@ -145,8 +145,10 @@ async function mockDictationRpc(
   voiceStatusCalls: RpcCall[];
   sttCalls: RpcCall[];
   sentMessages: string[];
+  setCapability: (capability: VoiceCapability) => void;
   releaseTranscript: (text: string) => Promise<void>;
 }> {
+  let capability = options.capability ?? 'available';
   const voiceStatusCalls: RpcCall[] = [];
   const sttCalls: RpcCall[] = [];
   const sentMessages: string[] = [];
@@ -166,7 +168,7 @@ async function mockDictationRpc(
 
     if (body.method === 'openhuman.voice_status') {
       voiceStatusCalls.push({ method: body.method, params: body.params });
-      if (options.capability === 'missing') {
+      if (capability === 'missing') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -178,7 +180,7 @@ async function mockDictationRpc(
         });
       } else {
         await fulfill({
-          stt_available: options.capability !== 'unavailable',
+          stt_available: capability !== 'unavailable',
           tts_available: true,
           stt_engine: 'hosted',
           stt_error: null,
@@ -205,6 +207,9 @@ async function mockDictationRpc(
     voiceStatusCalls,
     sttCalls,
     sentMessages,
+    setCapability: next => {
+      capability = next;
+    },
     releaseTranscript: async text => {
       resolveTranscript?.(text);
       await expect.poll(async () => (await captureState(page)).sttSettled).toBe(1);
@@ -212,14 +217,14 @@ async function mockDictationRpc(
   };
 }
 
-async function openChat(page: Page, userId: string): Promise<Locator> {
+async function openChat(page: Page, userId: string): Promise<WebTestElement> {
   await bootAuthenticatedPage(page, userId, '/chat');
   await dismissWalkthroughIfPresent(page);
-  const input = page.getByTestId('chat-message-input');
-  await expect(input).toBeVisible();
+  const input = webElements(page).byTestId('chat-message-input');
+  await expect.poll(() => input.isVisible()).toBe(true);
   await createNewThread(page);
-  await expect(input).toBeVisible();
-  await clearChatComposer(input);
+  await expect.poll(() => input.isVisible()).toBe(true);
+  await input.clearComposer();
   return input;
 }
 
@@ -244,14 +249,14 @@ async function waitForSocketConnected(page: Page): Promise<void> {
 
 async function createNewThread(page: Page): Promise<void> {
   const before = page.url();
-  const sidebarButton = page.getByTestId('new-thread-sidebar-button');
+  const sidebarButton = webElements(page).byTestId('new-thread-sidebar-button');
   if (await sidebarButton.isVisible().catch(() => false)) {
     await sidebarButton.click();
   } else {
-    await page.getByTestId('new-thread-button').click();
+    await webElements(page).byTestId('new-thread-button').click();
   }
   await expect.poll(() => page.url()).not.toBe(before);
-  await expect(page.getByTestId('chat-message-input')).toBeVisible();
+  await expect.poll(() => webElements(page).byTestId('chat-message-input').isVisible()).toBe(true);
 }
 
 test.describe('Chat composer inline dictation', () => {
@@ -261,20 +266,20 @@ test.describe('Chat composer inline dictation', () => {
     await installFakeCapture(page);
     const { sttCalls, sentMessages } = await mockDictationRpc(page);
     const input = await openChat(page, 'pw-composer-dictation-edit');
-    await replaceChatComposerText(input, 'Typed first');
+    await input.replaceComposerText('Typed first');
 
-    await page.getByRole('button', { name: 'Dictate', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Finish dictation' })).toBeVisible();
-    await expect(input).toBeEditable();
+    await webElements(page).button('Dictate').click();
+    await expect.poll(() => webElements(page).button('Finish dictation').isVisible()).toBe(true);
+    await expect.poll(() => input.isEditable()).toBe(true);
     await input.click();
     await input.press('End');
-    await input.pressSequentially(' and edited while speaking');
-    await expect.poll(() => composerText(input)).toBe('Typed first and edited while speaking');
+    await input.type(' and edited while speaking');
+    await expect.poll(() => input.composerText()).toBe('Typed first and edited while speaking');
     expect(sentMessages).toEqual([]);
 
-    await page.getByRole('button', { name: 'Finish dictation' }).click();
+    await webElements(page).button('Finish dictation').click();
     const draft = 'Typed first and edited while speaking dictated final words';
-    await expect.poll(() => composerText(input)).toBe(draft);
+    await expect.poll(() => input.composerText()).toBe(draft);
     expect(sttCalls).toHaveLength(1);
     expect(sttCalls[0].params.audio_base64).toBeTruthy();
     expect(sttCalls[0].params.mime_type).toBe('audio/webm');
@@ -284,10 +289,12 @@ test.describe('Chat composer inline dictation', () => {
 
     await input.click();
     await input.press('End');
-    await input.pressSequentially(' — reviewed');
+    await input.type(' — reviewed');
     await waitForSocketConnected(page);
-    await expect(page.getByTestId('send-message-button')).toBeEnabled();
-    await page.getByTestId('send-message-button').click();
+    await expect
+      .poll(() => webElements(page).byTestId('send-message-button').isEnabled())
+      .toBe(true);
+    await webElements(page).byTestId('send-message-button').click();
     await expect.poll(() => sentMessages).toEqual([`${draft} — reviewed`]);
   });
 
@@ -298,29 +305,29 @@ test.describe('Chat composer inline dictation', () => {
       await installFakeCapture(page);
       const rpc = await mockDictationRpc(page, { holdTranscript: true });
       const input = await openChat(page, `pw-composer-dictation-${cancellation.split(' ')[0]}`);
-      await replaceChatComposerText(input, 'Keep this draft');
-      await page.getByRole('button', { name: 'Dictate', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Finish dictation' })).toBeVisible();
-      await page.getByRole('button', { name: 'Finish dictation' }).click();
+      await input.replaceComposerText('Keep this draft');
+      await webElements(page).button('Dictate').click();
+      await expect.poll(() => webElements(page).button('Finish dictation').isVisible()).toBe(true);
+      await webElements(page).button('Finish dictation').click();
       await expect.poll(() => rpc.sttCalls.length).toBe(1);
 
       if (cancellation === 'Escape') {
         await input.click();
         await input.press('Escape');
       } else {
-        await page.getByRole('button', { name: cancellation }).click();
+        await webElements(page).button(cancellation).click();
       }
-      await expect(page.getByRole('button', { name: 'Dictate', exact: true })).toBeVisible();
+      await expect.poll(() => webElements(page).button('Dictate').isVisible()).toBe(true);
       await input.click();
       await input.press('End');
-      await input.pressSequentially(' and keep editing');
+      await input.type(' and keep editing');
       await rpc.releaseTranscript('late transcript that must be ignored');
-      await input.pressSequentially(' after cancellation');
+      await input.type(' after cancellation');
 
       await expect
-        .poll(() => composerText(input))
+        .poll(() => input.composerText())
         .toBe('Keep this draft and keep editing after cancellation');
-      await expect(page.getByRole('button', { name: 'Finish dictation' })).toHaveCount(0);
+      await expect.poll(() => webElements(page).button('Finish dictation').count()).toBe(0);
       expect(rpc.sentMessages).toEqual([]);
       await expect.poll(async () => (await captureState(page)).tracksStopped).toBe(1);
     });
@@ -330,20 +337,20 @@ test.describe('Chat composer inline dictation', () => {
     await installFakeCapture(page);
     const rpc = await mockDictationRpc(page, { holdTranscript: true });
     await openChat(page, 'pw-composer-dictation-thread-switch');
-    const input = page.getByTestId('chat-message-input');
-    await replaceChatComposerText(input, 'First thread draft');
-    await page.getByRole('button', { name: 'Dictate', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Finish dictation' })).toBeVisible();
-    await page.getByRole('button', { name: 'Finish dictation' }).click();
+    const input = webElements(page).byTestId('chat-message-input');
+    await input.replaceComposerText('First thread draft');
+    await webElements(page).button('Dictate').click();
+    await expect.poll(() => webElements(page).button('Finish dictation').isVisible()).toBe(true);
+    await webElements(page).button('Finish dictation').click();
     await expect.poll(() => rpc.sttCalls.length).toBe(1);
 
     await createNewThread(page);
-    await expect(page.getByRole('button', { name: 'Dictate', exact: true })).toBeVisible();
-    await replaceChatComposerText(input, 'Second thread draft');
+    await expect.poll(() => webElements(page).button('Dictate').isVisible()).toBe(true);
+    await input.replaceComposerText('Second thread draft');
     await rpc.releaseTranscript('late words from the first thread');
-    await input.pressSequentially(' checked');
+    await input.type(' checked');
 
-    await expect.poll(() => composerText(input)).toBe('Second thread draft checked');
+    await expect.poll(() => input.composerText()).toBe('Second thread draft checked');
     expect(rpc.sentMessages).toEqual([]);
     await expect.poll(async () => (await captureState(page)).tracksStopped).toBe(1);
   });
@@ -354,10 +361,10 @@ test.describe('Chat composer inline dictation', () => {
       const rpc = await mockDictationRpc(page, { capability });
       const input = await openChat(page, `pw-composer-dictation-${capability}`);
       await expect.poll(() => rpc.voiceStatusCalls.length).toBeGreaterThan(0);
-      await replaceChatComposerText(input, 'Typing remains available');
+      await input.replaceComposerText('Typing remains available');
 
-      await expect(page.getByRole('button', { name: 'Dictate', exact: true })).toHaveCount(0);
-      await expect(input).toBeEditable();
+      await expect.poll(() => webElements(page).button('Dictate').count()).toBe(0);
+      await expect.poll(() => input.isEditable()).toBe(true);
       expect((await captureState(page)).permissionRequests).toBe(0);
     });
   }
@@ -367,8 +374,29 @@ test.describe('Chat composer inline dictation', () => {
     await mockDictationRpc(page);
     const input = await openChat(page, 'pw-composer-dictation-unsupported');
 
-    await expect(page.getByRole('button', { name: 'Dictate', exact: true })).toHaveCount(0);
-    await expect(input).toBeEditable();
+    await expect.poll(() => webElements(page).button('Dictate').count()).toBe(0);
+    await expect.poll(() => input.isEditable()).toBe(true);
+    expect((await captureState(page)).permissionRequests).toBe(0);
+  });
+
+  test('explains unavailable speech and recovers on focus without switching threads', async ({
+    page,
+  }) => {
+    await installFakeCapture(page);
+    const rpc = await mockDictationRpc(page, { capability: 'unavailable' });
+    const input = await openChat(page, 'pw-composer-dictation-recovery');
+    await input.replaceComposerText('Keep my draft');
+    const error = webElements(page).alert('Dictation is unavailable');
+    await expect.poll(() => error.isVisible()).toBe(true);
+    await expect.poll(() => webElements(page).button('Dictate').count()).toBe(0);
+    const threadUrl = page.url();
+
+    rpc.setCapability('available');
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect.poll(() => webElements(page).button('Dictate').isVisible()).toBe(true);
+    await expect.poll(() => error.count()).toBe(0);
+    expect(page.url()).toBe(threadUrl);
+    expect(await input.composerText()).toBe('Keep my draft');
     expect((await captureState(page)).permissionRequests).toBe(0);
   });
 
@@ -376,15 +404,15 @@ test.describe('Chat composer inline dictation', () => {
     await installFakeCapture(page, { permissionDenied: true });
     const { sttCalls, sentMessages } = await mockDictationRpc(page);
     const input = await openChat(page, 'pw-composer-dictation-permission');
-    await replaceChatComposerText(input, 'My draft stays');
-    await page.getByRole('button', { name: 'Dictate', exact: true }).click();
+    await input.replaceComposerText('My draft stays');
+    await webElements(page).button('Dictate').click();
 
-    const error = page.getByRole('alert').filter({ hasText: 'Microphone permission denied' });
-    await expect(error).toBeVisible();
-    await expect(error).toContainText(/permission|denied|microphone/i);
-    await expect(page.getByRole('button', { name: 'Dictate', exact: true })).toBeEnabled();
-    await expect(input).toBeEditable();
-    expect(await composerText(input)).toBe('My draft stays');
+    const error = webElements(page).alert('Microphone permission denied');
+    await expect.poll(() => error.isVisible()).toBe(true);
+    await expect.poll(() => error.text()).toMatch(/permission|denied|microphone/i);
+    await expect.poll(() => webElements(page).button('Dictate').isEnabled()).toBe(true);
+    await expect.poll(() => input.isEditable()).toBe(true);
+    expect(await input.composerText()).toBe('My draft stays');
     expect(sttCalls).toEqual([]);
     expect(sentMessages).toEqual([]);
     expect((await captureState(page)).recordingsStarted).toBe(0);

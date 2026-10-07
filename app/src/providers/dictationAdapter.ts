@@ -44,11 +44,13 @@ export function isDictationCaptureSupported(): boolean {
   );
 }
 
+/** Prefer supported compressed audio; an empty value lets the browser choose. */
 function pickRecorderMime(): string {
   if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
   return PREFERRED_MIMES.find(mime => MediaRecorder.isTypeSupported(mime)) ?? '';
 }
 
+/** Map capture failures to localizable codes without retaining device details. */
 function permissionErrorCode(error: unknown): DictationErrorCode {
   const name = typeof error === 'object' && error !== null && 'name' in error ? error.name : '';
   if (name === 'NotAllowedError' || name === 'SecurityError') return 'permission-denied';
@@ -82,18 +84,22 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
   private active: ActiveSession | null = null;
   private nextSessionId = 0;
 
+  /** Stable external-store snapshot, replaced only when the session changes. */
   getSnapshot = (): DictationSnapshot => this.snapshot;
 
+  /** Subscribe to capture state and return an idempotent unsubscription function. */
   subscribe = (listener: () => void): (() => void) => {
     this.subscribers.add(listener);
     return () => this.subscribers.delete(listener);
   };
 
+  /** Notify the host of a content-free phase or error transition. */
   private publish(snapshot: DictationSnapshot): void {
     this.snapshot = snapshot;
     notify(this.subscribers, undefined);
   }
 
+  /** Discard the current clip and invalidate any pending transcription result. */
   cancel = (): void => {
     this.active?.cancel();
   };
@@ -104,6 +110,7 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
     this.subscribers.clear();
   };
 
+  /** Replace any previous session and defer capture until listeners can attach. */
   listen = (): DictationAdapter.Session => {
     this.cancel();
     const sessionId = ++this.nextSessionId;
@@ -127,6 +134,7 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
       resolveCompletion = resolve;
     });
 
+    /** Detach device-loss handlers before stopping every owned microphone track. */
     const releaseStream = () => {
       detachTracks?.();
       detachTracks = null;
@@ -142,6 +150,7 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
       }
     };
 
+    /** Terminate exactly once, release resources, and settle every stop caller. */
     const finish = (
       reason: 'stopped' | 'cancelled' | 'error',
       error: DictationErrorCode | null = null,
@@ -185,6 +194,7 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
     this.active = active;
     this.publish({ phase: 'starting', error: null });
 
+    /** Transcribe the completed clip, retry as WAV, and emit only a live result. */
     const finalize = async () => {
       if (ended || finalizing) return;
       finalizing = true;
@@ -239,6 +249,7 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
       }
     };
 
+    /** Finish the clip once; repeated calls share the same bounded completion. */
     const stop = (): Promise<void> => {
       if (ended || stopping) return completion;
       if (status.type === 'starting') {
@@ -263,6 +274,7 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
       return completion;
     };
 
+    /** Request capture and release late permission grants after cancellation. */
     const start = async () => {
       if (ended) return;
       if (!isDictationCaptureSupported()) {
@@ -324,7 +336,9 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
         status = { type: 'running' };
         this.publish({ phase: 'recording', error: null });
         if (ended) return;
-        recordingTimer = setTimeout(() => void stop(), MAX_DICTATION_RECORDING_MS);
+        // Only Finish authorizes transcription; a duration limit must never
+        // upload a clip the user may still intend to discard.
+        recordingTimer = setTimeout(() => finish('error', 'timed-out'), MAX_DICTATION_RECORDING_MS);
         log('session=%d recording started', sessionId);
         notify(startListeners, undefined);
       } catch {
@@ -340,19 +354,23 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
     void Promise.resolve().then(start);
 
     return {
+      /** Expose the assistant-ui session status independently of host UI phases. */
       get status() {
         return status;
       },
       stop,
       cancel: active.cancel,
+      /** Receive the final transcript while the composer session is still active. */
       onSpeech(callback) {
         speechListeners.add(callback);
         return () => speechListeners.delete(callback);
       },
+      /** Receive confirmation that microphone recording actually started. */
       onSpeechStart(callback) {
         startListeners.add(callback);
         return () => startListeners.delete(callback);
       },
+      /** Receive terminal cleanup, including cancellation with an empty result. */
       onSpeechEnd(callback) {
         endListeners.add(callback);
         return () => endListeners.delete(callback);
@@ -361,6 +379,7 @@ export class OpenHumanDictationAdapter implements DictationAdapter {
   };
 }
 
+/** Create an independent capture lifecycle for one chat runtime. */
 export function createOpenHumanDictationAdapter(): OpenHumanDictationAdapter {
   return new OpenHumanDictationAdapter();
 }

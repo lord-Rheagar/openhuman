@@ -350,6 +350,8 @@ describe('dictation on the editable Thread composer', () => {
 });
 
 const ERROR_CASES = [
+  ['stt-unavailable', 'composer.dictationUnavailable'],
+  ['voice-status-failed', 'composer.dictationStatusFailed'],
   ['microphone-unavailable', 'mic.unavailable'],
   ['permission-denied', 'mic.permissionDenied'],
   ['device-unavailable', 'mic.deviceUnavailable'],
