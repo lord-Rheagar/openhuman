@@ -183,7 +183,7 @@ describe('dictation on the editable Thread composer', () => {
     expect(onNew).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Finish dictation' }));
-    expect(screen.getByRole('status')).toHaveTextContent(/transcribing/i);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/transcribing/i));
     expect(screen.getByTestId('host-draft')).toHaveTextContent('Draft edited while recording');
     await typeDraft('Draft edited while transcribing');
     await act(async () => {
@@ -228,7 +228,7 @@ describe('dictation on the editable Thread composer', () => {
     await start();
     await typeDraft('Keep this draft');
     fireEvent.click(screen.getByRole('button', { name: 'Finish dictation' }));
-    expect(screen.getByRole('status')).toHaveTextContent(/transcribing/i);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/transcribing/i));
     fireEvent.click(screen.getByRole('button', { name: 'Discard dictation' }));
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByRole('button', { name: 'Dictate' })).toBeEnabled();
@@ -330,7 +330,7 @@ describe('dictation on the editable Thread composer', () => {
       await typeDraft('Preserved voice mode draft');
       if (phase === 'transcribing') {
         fireEvent.click(screen.getByRole('button', { name: 'Finish dictation' }));
-        expect(screen.getByRole('status')).toHaveTextContent(/transcribing/i);
+        await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/transcribing/i));
       }
 
       fireEvent.click(screen.getByRole('button', { name: 'Voice mode' }));

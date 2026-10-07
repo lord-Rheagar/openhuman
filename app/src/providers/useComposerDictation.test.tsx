@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CoreRpcError } from '../services/coreRpcClient';
 import { CoreStateContext, type CoreStateContextValue } from './coreStateContext';
-import type { DictationSnapshot } from './dictationAdapter';
+import type { DictationErrorCode, DictationSnapshot } from './dictationAdapter';
 import { useComposerDictation } from './useComposerDictation';
 
 const mocks = vi.hoisted(() => ({
@@ -252,7 +252,7 @@ describe('useComposerDictation', () => {
     expect(result.current.error).toBe('stt-unavailable');
   });
 
-  it('publishes capture and transcription phases while allowing recoverable errors to retry', async () => {
+  it('publishes capture and transcription phases', async () => {
     const { result } = renderHook(() => useComposerDictation('thread-a'));
     await waitFor(() => expect(result.current.adapter).toBeDefined());
     const adapter = adapters[0]!;
@@ -261,12 +261,42 @@ describe('useComposerDictation', () => {
       act(() => adapter.publish({ phase, error: null }));
       expect(result.current.status).toBe(phase);
     }
-    act(() => adapter.publish({ phase: 'idle', error: 'permission-denied' }));
-    expect(result.current.error).toBe('permission-denied');
-    expect(result.current.adapter).toBe(adapter);
-    act(() => adapter.publish({ phase: 'recording', error: null }));
-    expect(result.current.error).toBeNull();
   });
+
+  // Keep this exhaustive as the adapter adds recoverable errors. A missing voice
+  // domain withdraws the capability instead and is covered separately below.
+  const recoverableErrors = {
+    'microphone-unavailable': true,
+    'permission-denied': true,
+    'device-unavailable': true,
+    'device-in-use': true,
+    'recorder-failed': true,
+    'no-audio': true,
+    'no-speech': true,
+    'transcription-failed': true,
+    'timed-out': true,
+  } satisfies Record<Exclude<DictationErrorCode, 'voice-unavailable'>, true>;
+
+  it.each(Object.keys(recoverableErrors) as (keyof typeof recoverableErrors)[])(
+    'publishes and clears %s while retaining the adapter for retry',
+    async error => {
+      const { result } = renderHook(() => useComposerDictation('thread-a'));
+      await waitFor(() => expect(result.current.adapter).toBeDefined());
+      const adapter = adapters[0]!;
+
+      act(() => adapter.publish({ phase: 'idle', error }));
+      expect(result.current.status).toBe('idle');
+      expect(result.current.error).toBe(error);
+      expect(result.current.adapter).toBe(adapter);
+      expect(adapter.cancel).not.toHaveBeenCalled();
+      expect(adapter.dispose).not.toHaveBeenCalled();
+
+      act(() => adapter.publish({ phase: 'recording', error: null }));
+      expect(result.current.status).toBe('recording');
+      expect(result.current.error).toBeNull();
+      expect(result.current.adapter).toBe(adapter);
+    }
+  );
 
   it('withdraws and cancels dictation when STT discovers the voice domain is absent', async () => {
     const { result } = renderHook(() => useComposerDictation('thread-a'));
