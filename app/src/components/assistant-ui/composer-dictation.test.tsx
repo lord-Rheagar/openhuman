@@ -26,9 +26,13 @@ import { ComposerDictationControls, ComposerDictationStatus } from './composer-d
 import { Thread } from './thread';
 
 const transcribe = vi.fn();
+const encodeWav = vi.fn();
 vi.mock('@/features/human/voice/sttClient', async importOriginal => ({
   ...(await importOriginal<typeof import('@/features/human/voice/sttClient')>()),
   transcribeWithFactory: (...args: unknown[]) => transcribe(...args),
+}));
+vi.mock('@/features/human/voice/wavEncoder', () => ({
+  encodeBlobToWav: (...args: unknown[]) => encodeWav(...args),
 }));
 
 const NO_MESSAGES: ThreadMessageLike[] = [];
@@ -103,6 +107,7 @@ describe('dictation on the editable Thread composer', () => {
 
   beforeEach(() => {
     transcribe.mockReset().mockResolvedValue('spoken addition');
+    encodeWav.mockReset();
     track = Object.assign(new EventTarget(), { stop: vi.fn(), readyState: 'live' });
     getUserMedia = vi.fn().mockResolvedValue({ getTracks: () => [track] });
     originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
@@ -202,6 +207,48 @@ describe('dictation on the editable Thread composer', () => {
     expect(track.stop).toHaveBeenCalledOnce();
     expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByRole('button', { name: 'Dictate' })).toBeEnabled();
+  });
+
+  it('waits for WAV conversion and appends the retry result once to the edited draft', async () => {
+    const conversion = deferred<Blob>();
+    const retry = deferred<string>();
+    transcribe
+      .mockRejectedValueOnce(new Error('native container rejected'))
+      .mockReturnValueOnce(retry.promise);
+    encodeWav.mockReturnValue(conversion.promise);
+    const { onNew } = mount();
+    await start();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish dictation' }));
+
+    await waitFor(() => expect(encodeWav).toHaveBeenCalledOnce());
+    const native = transcribe.mock.calls[0][0] as Blob;
+    expect(native.type).toBe('audio/webm');
+    expect(encodeWav).toHaveBeenCalledWith(native);
+    expect(transcribe).toHaveBeenCalledOnce();
+    expect(track.stop).toHaveBeenCalledOnce();
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/transcribing/i));
+    await typeDraft('Edited during conversion');
+
+    const wav = new Blob(['PCM fixture'], { type: 'audio/wav' });
+    await act(async () => conversion.resolve(wav));
+    await waitFor(() => expect(transcribe).toHaveBeenNthCalledWith(2, wav));
+    expect(screen.getByTestId('host-draft')).toHaveTextContent('Edited during conversion');
+    await typeDraft('Edited during retry');
+    await act(async () => retry.resolve('fallback words'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('host-draft')).toHaveTextContent(
+        'Edited during retry fallback words'
+      )
+    );
+    expect(screen.getByTestId('chat-message-input').textContent).toBe(
+      'Edited during retry fallback words'
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Dictate' })).toBeEnabled();
+    expect(transcribe).toHaveBeenCalledTimes(2);
+    expect(encodeWav).toHaveBeenCalledOnce();
+    expect(onNew).not.toHaveBeenCalled();
   });
 
   it('sends the edited dictated text only after the user explicitly sends it', async () => {

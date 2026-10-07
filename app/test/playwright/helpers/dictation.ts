@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+// The shared E2E entry point re-exports these from web-elements.ts for browser tests.
 import { webElements, type WebTestElement } from '../../e2e/helpers/element-helpers';
 import { bootAuthenticatedPage, dismissWalkthroughIfPresent } from './core-rpc';
 
@@ -188,7 +189,7 @@ export async function mockDictationRpc(
   sentMessages: string[];
   setCapability: (capability: VoiceCapability) => void;
   setSttResult: (result: SttResult) => void;
-  releaseTranscript: (text: string) => Promise<void>;
+  releaseTranscript: (text: string, expectedAttempts: number) => Promise<void>;
 }> {
   let capability = options.capability ?? 'available';
   let sttResult = options.sttResult ?? 'success';
@@ -273,9 +274,12 @@ export async function mockDictationRpc(
     setSttResult: next => {
       sttResult = next;
     },
-    releaseTranscript: async text => {
+    releaseTranscript: async (text, expectedAttempts) => {
+      // Wait for the held request to exist before releasing it. A rejected native
+      // request can already be settled while its WAV retry is still in flight.
+      await expect.poll(() => sttCalls.length).toBe(expectedAttempts);
       resolveTranscript?.(text);
-      await expect.poll(async () => (await captureState(page)).sttSettled).toBe(1);
+      await expect.poll(async () => (await captureState(page)).sttSettled).toBe(expectedAttempts);
     },
   };
 }

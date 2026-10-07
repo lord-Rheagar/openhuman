@@ -29,6 +29,8 @@ vi.mock('../services/coreRpcClient', () => ({
     return () => mocks.invalidationListeners.delete(listener);
   },
 }));
+// Capability/error projection is isolated here. dictationAdapter.fallback.test.ts
+// drives the real adapter's retry, cancellation, and conversion deadlines.
 vi.mock('./dictationAdapter', () => ({
   createOpenHumanDictationAdapter: mocks.createAdapter,
   isDictationCaptureSupported: mocks.captureSupported,
